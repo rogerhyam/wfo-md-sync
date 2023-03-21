@@ -50,9 +50,12 @@ else:
                 f"Please either add a root.id file or checklist.csv file to the {data_dir} folder and try again.\n")
             exit()
 
+# offer to zip up the data director
+# FIXME
+
 # indicate what mode we are in
 if rootId:
     print("- Monographic mode")
-    wfo.banana(rootId)
+    wfo.synchronizeFromRoot(rootId, data_dir)
 else:
     print("- Floristic mode")

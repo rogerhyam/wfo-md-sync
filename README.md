@@ -8,11 +8,15 @@ The  [World Flora Online (WFO)](http://www.worldfloraonline.org/) is the interna
 
 The [WFO PlantList (WfoPlantList)](https://wfoplantlist.org/) is a collaborative project within the WFO to maintain a consensus nomenclature and classification of plants to act as a __taxonomic backbone__ for the WFO and other projects.
 
-The [WfoPlantList API](https://list.worldfloraonline.org/) provided machine readable access to the WfoPlantList so that it can be used in other projects.
+The [WfoPlantList API](https://list.worldfloraonline.org/) provides machine readable access to the WfoPlantList so that it can be used in other projects.
 
 This Python script will query the API to create and maintain a set of [Markdown](https://en.wikipedia.org/wiki/Markdown) text files in sync with the current taxonomy and nomenclature. This means that researchers can work on a local set of notes that are bound to the global consensus view of plant diversity.
 
-The initial intent is for the markdown files to be edited using the [Obsidian](https://obsidian.md/) application, possibly with taxonomically focussed plugins, but any editor or IDE could be used. The local markdown files could be versioned and backed up to GitHub. They could also be published directly to the web or to print via some intermediate applications.
+The initial intent is for the markdown files to be edited using the [Obsidian](https://obsidian.md/) application, possibly with taxonomically focussed plugins, but any editor or IDE could be used. The local markdown files could be versioned and backed up to GitHub. They could also be published directly to the web or to print via some intermediate application.
+
+## Caveat
+
+This is a taxon based system not a substitute for a specimen based taxonomic editor. Most monographic work starts with specimens and observations and derives a taxonomy. This starts with a taxonomy and populates it with observations. It may be useful for monographic, floristic and other tasks but it is not the ideal tool for alpha taxonomy.
 
 ## Modes of Operation
 
