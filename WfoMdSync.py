@@ -8,13 +8,13 @@ print("--------------------------")
 
 
 # where all the goodness is stored
-data_dir = 'data/'  # ends in slash
+data_dir = 'data'  # doesn't ends in slash
 
 # the file containing the root wfo id if we are in monographic mode
-root_id_file_path = data_dir + 'root.id'
+root_id_file_path = data_dir + '/root.id'
 
 # the file containing the list of wfo ids if we are in floristic mode
-checklist_file_path = data_dir + 'checklist.csv'
+checklist_file_path = data_dir + '/checklist.csv'
 
 # Firstly check which mode we are in
 # In monographic mode there is a root.id file in the data directory

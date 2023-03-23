@@ -2,7 +2,6 @@
 import os.path
 import requests
 import json
-import yaml
 from pprint import pprint
 
 # we keep a list of taxa we have processed this run
@@ -16,35 +15,46 @@ def synchronizeFromList(csvFilePath, dataDir):
 def synchronizeFromRoot(wfoId, dataDir):
     print(f"- Synchronizing root taxon with id: {wfoId}")
     taxon = getTaxonGraph(wfoId)
-    writeFile(taxon, dataDir, True)
+    # knock the name of the end of the path to get the root
+    pathParts = os.path.split(taxon['pathString'])
+    writeFile(taxon, dataDir, pathParts[0], True)
 
 
-def writeFile(taxon, dataDir, includeChildren):
+def writeFile(taxon, dataDir, rootPath='', includeChildren=False):
 
-    filePath = dataDir + taxon['hasName']['fullNameStringNoAuthorsPlain']
+    # removing the path from the wfo root (Code) to the root taxon
+    if len(taxon['pathString']) > len(rootPath):
+        filePath = dataDir + taxon['pathString'][len(rootPath):]
+    else:
+        filePath = dataDir
+
+    # check directory exist
+    fileDirParts = os.path.split(filePath)
+    if not os.path.exists(fileDirParts[0]):
+        os.makedirs(fileDirParts[0])
+
+    # filePath actually ends with the full taxon name now.
+    filePath = fileDirParts[0] + '/' + \
+        taxon['hasName']['fullNameStringNoAuthorsPlain']
 
     # create the taxon file itself
     if os.path.exists(filePath + '.md'):
-        updateFile(taxon, filePath)
+        updateFile(taxon, filePath, rootPath)
     else:
-        createFile(taxon, filePath)
+        createFile(taxon, filePath, rootPath)
 
     # flag that we have done this one
     processedTaxa.append(taxon['hasName']['id'])
 
     if includeChildren and len(taxon['hasPart']) > 0:
 
-        # make a dir with same name as file
-        if not os.path.exists(filePath):
-            os.makedirs(filePath)
-
         # work through the kids
         for child in taxon['hasPart']:
             childTaxon = getTaxonGraph(child['hasName']['id'])
-            writeFile(childTaxon, filePath + '/', True)
+            writeFile(childTaxon, dataDir, rootPath, True)
 
 
-def updateFile(taxon, filePath):
+def updateFile(taxon, filePath, rootPath):
     print(f"Updating taxon {filePath}")
 
     # get the data
@@ -53,7 +63,7 @@ def updateFile(taxon, filePath):
     file.close()
 
     # update the taxon stuff
-    sections['wfo'] = getWfoData(taxon)
+    sections['wfo'] = getWfoData(taxon, rootPath)
 
     # write it back out
     file = open(filePath + '.md', 'w')
@@ -63,33 +73,78 @@ def updateFile(taxon, filePath):
     file.close()
 
 
-def createFile(taxon, filePath):
+def createFile(taxon, filePath, rootPath):
     print(f"Creating file {filePath}")
     # content of file
     file = open(filePath + '.md', 'w')
-    file.write(getWfoData(taxon))
+    file.write(getWfoData(taxon, rootPath))
     file.close()
 
 
-def getWfoData(taxon):
-    out = "__Full Name:__ " + taxon['hasName']['fullNameStringHtml']
+def getWfoData(taxon, rootPath):
+
+    if taxon['hasName']['authorsString']:
+        out = f"{taxon['hasName']['authorsString']} | "
+    else:
+        out = ''
+
+    out += f"{taxon['hasName']['rank']}"
+
+    if taxon['hasName']['citationMicro']:
+        out += f" | {taxon['hasName']['citationMicro']}"
+
+    # path not if we are at the root of all
+    if os.path.split(taxon['pathString'])[0] != rootPath:
+        taxon['path'].reverse()
+        out += "\n__Path:__"
+        for ancestor in taxon['path']:
+            if len(ancestor['pathString']) <= len(rootPath) or ancestor['id'] == taxon['id']:
+                continue
+            out += f" {getTaxonLink(ancestor, rootPath, False)} >"
+        out += f" {ancestor['hasName']['fullNameStringNoAuthorsPlain']}"
 
     # Synonyms
     if len(taxon['hasSynonym']):
-        out += "\n\n## Synonyms"
+        out += "\n\n### Synonyms"
 
     for synonym in taxon['hasSynonym']:
         out += f"\n- {synonym['fullNameStringPlain']}"
 
     # Children
     if len(taxon['hasPart']):
-        out += "\n\n## Subtaxa"
+        out += "\n\n### Subtaxa"
 
-    for child in taxon['hasPart']:
-        out += f"\n- [[{child['hasName']['fullNameStringNoAuthorsPlain']}|{child['hasName']['fullNameStringPlain']} ]]"
+        for child in taxon['hasPart']:
+            out += f"\n- {getTaxonLink(child, rootPath)}"
+
+    # References
+    if len(taxon['hasName']['references']) > 0 or len(taxon['references']) > 0:
+        out += "\n\n### References"
+
+        # Nomenclatural
+        if len(taxon['hasName']['references']) > 0:
+            out += "\n#### Nomenclatural"
+            # FIXME
+
+        # Taxonomic
+        if len(taxon['references']) > 0:
+            out += "\n#### Taxonomic"
+            # FIXME
 
     out += "\n\n---\n\n"
     return out
+
+
+def getTaxonLink(taxon, rootPath, includeAuthors=True):
+    filePath = os.path.split(taxon['pathString'][len(rootPath):])[0]
+    if filePath != "/":
+        filePath += "/"
+    filePath += taxon['hasName']['fullNameStringNoAuthorsPlain']
+    filePath += ".md"
+    if includeAuthors:
+        return f"[[{filePath}|{taxon['hasName']['fullNameStringPlain']}]]"
+    else:
+        return f"[[{filePath}|{taxon['hasName']['fullNameStringNoAuthorsPlain']}]]"
 
 
 def splitFileContent(content):
@@ -107,15 +162,17 @@ def splitFileContent(content):
             section = 'wfo'
 
         # actually add the line
-        sectionData[section] += line
+        sectionData[section] += line + "\n"
 
         # --- marks end of meta section
         if lineCount > 0 and section == 'meta' and line == '---':
             section = 'wfo'
 
         # --- marks end of wfo section
-        if lineCount > 0 and section == 'wfo' and line == '---':
+        if lineCount > 0 and section == 'wfo' and line.strip() == '---':
             section = 'body'
+
+        lineCount += 1
 
     return sectionData
 
@@ -126,40 +183,60 @@ def getTaxonGraph(wfoId):
     url = 'https://list.worldfloraonline.org/gql.php'
 
     query = """
-        query getTaxonGraph($wfoId: String!){
-            taxonNameById(nameId: $wfoId){
-                id
-                fullNameStringPlain
-                currentPreferredUsage{
-                    id
-                    path{
-                        id
-                        hasName{
-                            id
-                            fullNameStringNoAuthorsPlain
-                        }
-                    }
-                    hasName{
-                        id
-                        fullNameStringNoAuthorsPlain
-                        fullNameStringHtml
-                    }
-                    hasSynonym{
-                        id
-                        fullNameStringPlain
-                    }
-                    hasPart{
-                        id
-                        hasName{
-                            id
-                            fullNameStringNoAuthorsPlain
-                            fullNameStringPlain
-                            fullNameStringHtml
-                        }
-                    }
-                }
-            }
+query getTaxonGraph($wfoId: String!) {
+  taxonNameById(nameId: $wfoId) {
+    id
+    fullNameStringPlain
+    currentPreferredUsage {
+      id
+      pathString
+      path {
+        id
+        pathString
+        hasName {
+          ...nameFields
         }
+      }
+      hasName {
+        ...nameFields
+      }
+      hasSynonym {
+        ...nameFields
+      }
+      hasPart {
+        id
+        pathString
+        hasName {
+          ...nameFields
+        }
+      }
+      references {
+        uri
+        label
+        comment
+        kind
+        thumbnailUri
+      }
+    }
+  }
+}
+fragment nameFields on TaxonName {
+  id
+  fullNameStringHtml
+  fullNameStringPlain
+  fullNameStringNoAuthorsHtml
+  fullNameStringNoAuthorsPlain
+  authorsString
+  citationMicro
+  rank
+  references{
+    uri
+    label
+    comment
+    kind
+    thumbnailUri
+  }
+}
         """
 
     variables = {"wfoId": wfoId}
